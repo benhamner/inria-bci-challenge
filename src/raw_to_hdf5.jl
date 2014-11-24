@@ -9,6 +9,14 @@ r = ZipFile.Reader(train_file)
 for f in r.files
     data = readcsv(f, Float64, skipstart=1)
     sess = f.name[1:end-4]
-    h5write(joinpath(hdf5_dir, "Train", sess*".h5"), "bci/data", data)
+    h5write(joinpath(hdf5_dir, "Train", sess*".h5"), "data", data)
+end
+close(r)
+
+r = ZipFile.Reader(test_file)
+for f in r.files
+    data = readcsv(f, Float64, skipstart=1)
+    sess = f.name[1:end-4]
+    h5write(joinpath(hdf5_dir, "Test", sess*".h5"), "data", data)
 end
 close(r)
