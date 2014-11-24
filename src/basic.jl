@@ -1,12 +1,10 @@
 using DataFrames
+using HDF5
 using MachineLearning
-using XSV
-using ZipFile
 
-train_file      = ARGS[1]
+hdf5_data_file  = ARGS[1]
 train_labels    = ARGS[2]
-test_file       = ARGS[3]
-submission_file = ARGS[4]
+submission_file = ARGS[3]
 
 function extract_features(data::Array{Float64, 2})
 	# data is 59 columns wide
@@ -59,66 +57,44 @@ println("Subject 2, Session 1, Event 5: ", get_label(labels, 2, 1, 5))
 w = zeros(20)
 selected_features = zeros(Int, 20)
 
-r = ZipFile.Reader(train_file)
-for f in r.files[1:1]
-    println("Filename: $(f.name)")
-    println(typeof(f))
-    m = match(r"Data_S(\d+)_Sess(\d+).csv", f.name)
-    if typeof(m)==Void
-        throw("Filename doesn't match pattern: " * f.name)
+h5open(hdf5_data_file, "r") do h5_file
+    for session_name in names(h5_file["train"])[1:1]
+        println(session_name)
+        m = match(r"Data_S(\d+)_Sess(\d+)", session_name)
+        if typeof(m)==Void
+            throw("Filename doesn't match pattern: " * session_name)
+        end
+        println("Subject: ", m.captures[1], "Session: ", m.captures[2])
+        subject = int(m.captures[1])
+        session = int(m.captures[2])
+        data = read(h5_file["train"][session_name])
+        println("Train size data: ", size(data))
+        features = extract_features(data)
+        targets = Int[get_label(labels, subject, session, i) for i=1:size(features,1)]
+        imp = univariate_gaussian_importance(features, targets)
+        selected_features[:] = sortperm(imp, rev=true)[1:20]
+        println("Seleected Feature Importance: ", imp[selected_features])
+
+        w[:] = lda(features[:, selected_features], targets)
+        println("w: ", w)
     end
-    println("Subject: ", m.captures[1], "Session: ", m.captures[2])
-    subject = int(m.captures[1])
-    session = int(m.captures[2])
-    data = readcsv(f, Float64, skipstart=1)
-    triggers = find(data[:,end])
-    println(size(data))
-    println(triggers)
-    features = extract_features(data)
-    println("Features, ", size(features))
-    println(features[1:5,1:5])
-    targets = Int[get_label(labels, subject, session, i) for i=1:size(features,1)]
-    imp = univariate_gaussian_importance(features, targets)
-    selected_features = sortperm(imp, rev=true)[1:20]
-    println("Seleected Feature Importance: ", imp[selected_features])
+    println("Selected Features: ", selected_features)
+    submission = DataFrame(IdFeedBack=ASCIIString[], Prediction=Float64[])
 
-    w[:] = lda(features[:, selected_features], targets)
-    println("w: ", w)
-
-    #xsv = readxsv(f)
-    #println(length(xsv))
-    #println("Max Row: ", maximum([length(row) for row=xsv]))
-    #println("Min Row: ", maximum([length(row) for row=xsv]))
-
-    #feedback_col = length(xsv[1])
-    #feedback = [int(xsv[i][feedback_col]) for i=2:length(xsv)]
-    #println(find(feedback))
-    #println(consume(xsv_stream))
-    #println(consume(xsv_stream))
-end
-close(r)
-println(labels)
-
-submission = DataFrame(IdFeedBack=ASCIIString[], Prediction=Float64[])
-
-r = ZipFile.Reader(test_file)
-for f in r.files
-    println("Filename: $(f.name)")
-    println(typeof(f))
-    m = match(r"Data_S(\d+)_Sess(\d+).csv", f.name)
-    if typeof(m)==Void
-        throw("Filename doesn't match pattern: " * f.name)
+    for session_name in names(h5_file["test"])
+        m = match(r"Data_S(\d+)_Sess(\d+)", session_name)
+        if typeof(m)==Void
+            throw("Filename doesn't match pattern: " * session_name)
+        end
+        println("Subject: ", m.captures[1], "Session: ", m.captures[2])
+        subject = int(m.captures[1])
+        session = int(m.captures[2])
+        data = read(h5_file["test"][session_name])
+        println("Test size data", size(data))
+        features = extract_features(data)[:,selected_features]
+        results = vec(features*w)
+        submission = vcat(submission, DataFrame(IdFeedBack=[id_feed_back(subject, session, i) for i=1:length(results)], Prediction=results))
     end
-    println("Subject: ", m.captures[1], "Session: ", m.captures[2])
-    subject = int(m.captures[1])
-    session = int(m.captures[2])
-    data = readcsv(f, Float64, skipstart=1)
-    features = extract_features(data)[:,selected_features]
-    results = vec(features*w)
-    println("Results: ", results)
-    submission = vcat(submission, DataFrame(IdFeedBack=[id_feed_back(subject, session, i) for i=1:length(results)], Prediction=results))
+
+    writetable(submission_file, submission)
 end
-
-writetable(submission_file, submission)
-
-# S01_Sess01_FB002
