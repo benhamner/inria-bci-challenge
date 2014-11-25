@@ -13,7 +13,7 @@ function extract_features(data::Array{Float64, 2})
 	# Col 2-57: 56 electrode features
 	# Col 58: EOG channel
 	# Col 59: Simulus channel
-    filter = digitalfilter(Bandpass(0.5, 1, fs=20), Butterworth(10))
+    filter = digitalfilter(Bandpass(0.5, 1, fs=200), Butterworth(10))
 
 	events = find(data[:,59])
 	zmuv = fit(data[:,2:58], ZmuvOptions())
