@@ -1,4 +1,5 @@
 using DataFrames
+using DSP
 using HDF5
 using MachineLearning
 
@@ -12,10 +13,11 @@ function extract_features(data::Array{Float64, 2})
 	# Col 2-57: 56 electrode features
 	# Col 58: EOG channel
 	# Col 59: Simulus channel
+    filter = digitalfilter(Bandpass(0.5, 1, fs=20), Butterworth(10))
 
 	events = find(data[:,59])
 	zmuv = fit(data[:,2:58], ZmuvOptions())
-	transformed = transform(zmuv, data[:,2:58])
+	transformed = transform(zmuv, filt(filter, data[:,2:58]))
 	println("\tFound ", length(events), " events")
 	window = 20:20:200 # samples, at a 200 Hz sampling rate
 	features = zeros(length(events), 57*length(window))
@@ -37,6 +39,7 @@ end
 
 function lda(features::Array{Float64, 2}, target::Vector{Int})
     groups = sort(unique(target))
+    println(groups)
     @assert length(groups)==2
 
     features_0 = features[target.!=groups[2],:]
@@ -54,11 +57,25 @@ get_label(labels::DataFrame, subject::Int, session::Int, event::Int) = labels[la
 println("Subject 2, Session 1, Event 4: ", get_label(labels, 2, 1, 4))
 println("Subject 2, Session 1, Event 5: ", get_label(labels, 2, 1, 5))
 
-w = zeros(20)
-selected_features = zeros(Int, 20)
+w                 = Array(Vector{Float64}, 0)
+selected_features = Array(Vector{Int}, 0)
+
+function make_predictions(features, selected_features, w) 
+    res = zeros(size(features, 1))
+    for i=1:length(selected_features)
+        m=vec(features[:,selected_features[i]]*w[i])
+        m_ind = sortperm(m)
+        m_t = zeros(length(m))
+        m_t[m_ind] = [1:length(m_ind)]./length(m_ind)
+
+        println(m[1:10])
+        res += m_t./length(selected_features)
+    end
+    res
+end
 
 h5open(hdf5_data_file, "r") do h5_file
-    for session_name in names(h5_file["train"])[1:1]
+    for session_name in names(h5_file["train"])
         println(session_name)
         m = match(r"Data_S(\d+)_Sess(\d+)", session_name)
         if typeof(m)==Void
@@ -72,13 +89,16 @@ h5open(hdf5_data_file, "r") do h5_file
         features = extract_features(data)
         targets = Int[get_label(labels, subject, session, i) for i=1:size(features,1)]
         imp = univariate_gaussian_importance(features, targets)
-        selected_features[:] = sortperm(imp, rev=true)[1:20]
-        println("Seleected Feature Importance: ", imp[selected_features])
-
-        w[:] = lda(features[:, selected_features], targets)
-        println("w: ", w)
+        sel_fea = sortperm(imp, rev=true)[1:20]
+        weights = lda(features[:, sel_fea], targets)
+        println("Selected Feature Importance: ", imp[sel_fea])
+        if sum(isnan(weights))==0
+            push!(selected_features, sel_fea)
+            push!(w, weights)
+        else
+            println("NaN weights, subject ", subject, " session ", session)
+        end
     end
-    println("Selected Features: ", selected_features)
     submission = DataFrame(IdFeedBack=ASCIIString[], Prediction=Float64[])
 
     for session_name in names(h5_file["test"])
@@ -91,8 +111,10 @@ h5open(hdf5_data_file, "r") do h5_file
         session = int(m.captures[2])
         data = read(h5_file["test"][session_name])
         println("Test size data", size(data))
-        features = extract_features(data)[:,selected_features]
-        results = vec(features*w)
+        features = extract_features(data)
+        results = make_predictions(features, selected_features, w)
+        println(results[1:10])
+
         submission = vcat(submission, DataFrame(IdFeedBack=[id_feed_back(subject, session, i) for i=1:length(results)], Prediction=results))
     end
 
