@@ -13,7 +13,7 @@ function extract_features(data::Array{Float64, 2})
 	# Col 2-57: 56 electrode features
 	# Col 58: EOG channel
 	# Col 59: Simulus channel
-    filter = digitalfilter(Bandpass(0.5, 1, fs=200), Butterworth(10))
+    filter = digitalfilter(Bandpass(0.5, 20, fs=200), Butterworth(10))
 
 	events = find(data[:,59])
 	zmuv = fit(data[:,2:58], ZmuvOptions())
@@ -54,12 +54,6 @@ labels = readtable(train_labels)
 id_feed_back(subject::Int, session::Int, event::Int) = @sprintf("S%02d_Sess%02d_FB%03d", subject, session, event)
 get_label(labels::DataFrame, subject::Int, session::Int, event::Int) = labels[labels[:IdFeedBack].==id_feed_back(subject, session, event), :Prediction][1]
 
-println("Subject 2, Session 1, Event 4: ", get_label(labels, 2, 1, 4))
-println("Subject 2, Session 1, Event 5: ", get_label(labels, 2, 1, 5))
-
-w                 = Array(Vector{Float64}, 0)
-selected_features = Array(Vector{Int}, 0)
-
 function make_predictions(features, selected_features, w) 
     res = zeros(size(features, 1))
     for i=1:length(selected_features)
@@ -73,6 +67,9 @@ function make_predictions(features, selected_features, w)
     end
     res
 end
+
+w                 = Array(Vector{Float64}, 0)
+selected_features = Array(Vector{Int}, 0)
 
 h5open(hdf5_data_file, "r") do h5_file
     for session_name in names(h5_file["train"])
@@ -91,7 +88,7 @@ h5open(hdf5_data_file, "r") do h5_file
         imp = univariate_gaussian_importance(features, targets)
         sel_fea = sortperm(imp, rev=true)[1:20]
         weights = lda(features[:, sel_fea], targets)
-        println("Selected Feature Importance: ", imp[sel_fea])
+        println("Selected Feature Importance: ", imp[sel_fea][1:4])
         if sum(isnan(weights))==0
             push!(selected_features, sel_fea)
             push!(w, weights)
