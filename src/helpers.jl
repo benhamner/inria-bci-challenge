@@ -14,7 +14,8 @@ function extract_features(data::Array{Float64, 2})
 	events = find(data[:,59])
 	zmuv = fit(data[:,2:58], ZmuvOptions())
 	transformed = transform(zmuv, filt(filter, data[:,2:58]))
-	window = 20:20:200 # samples, at a 200 Hz sampling rate
+	#transformed = filt(filter, data[:,2:58])
+	window = 10:10:400 # samples, at a 200 Hz sampling rate
 	features = zeros(length(events), 57*length(window))
 	for i=1:length(events)
 		features[i,:] = transformed[events[i]+window, :]

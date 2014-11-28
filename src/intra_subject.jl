@@ -19,15 +19,18 @@ h5open(hdf5_data_file, "r") do h5_file
         features = extract_features(data)
         targets = Int[get_label(labels, subject_id(sessions[1]), session_id(sessions[1]), i) for i=1:size(features,1)]
 		imp = univariate_gaussian_importance(features, targets)
-        sel_fea = sortperm(imp, rev=true)[1:20]
+        sel_fea = sortperm(imp, rev=true)[1:end]
         #weights = lda(features[:, sel_fea], targets)
 		model = fit(features[:, sel_fea], targets, classification_forest_options())
+		preds = vec(predict_probs(model, features[:, sel_fea])[:,2])
+		println("Session ", sessions[1], " results: ", auc(targets, preds), " Positive Targets: ", sum(targets), "/", length(targets))
+
 		for session in sessions[2:end]
 			data = read(h5_file["train"][session])
         	features = extract_features(data)
 			targets = Int[get_label(labels, subject_id(session), session_id(session), i) for i=1:size(features,1)]
 			preds = vec(predict_probs(model, features[:, sel_fea])[:,2])
-			println("Session ", session, " results: ", auc(targets, preds))
+			println("Session ", session, " results: ", auc(targets, preds), " Positive Targets: ", sum(targets), "/", length(targets))
 		end
 	end
 end
