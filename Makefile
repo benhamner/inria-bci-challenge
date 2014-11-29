@@ -8,6 +8,9 @@ raw-to-submission:
 basic:
 	julia src/basic.jl $(WORKING_DIR)/data.h5 $(RAW_DIR)/TrainLabels.csv $(WORKING_DIR)/sub3.csv
 
+combined:
+	julia src/combined.jl $(WORKING_DIR)/data.h5 $(RAW_DIR)/TrainLabels.csv $(WORKING_DIR)/sub4.csv
+
 intra-subject:
 	julia src/intra_subject.jl $(WORKING_DIR)/data.h5 $(RAW_DIR)/TrainLabels.csv
 
