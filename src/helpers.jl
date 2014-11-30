@@ -1,6 +1,7 @@
 using DataFrames
 using DSP
 using HDF5
+using Iterators
 using MachineLearning
 
 function extract_features(data::Array{Float64, 2})
@@ -61,3 +62,28 @@ end
 
 subject_id(session_name::String) = int(match(r"Data_S(\d+)_Sess(\d+)", session_name).captures[1])
 session_id(session_name::String) = int(match(r"Data_S(\d+)_Sess(\d+)", session_name).captures[2])
+
+function inter_subject_train_valid(hdf5_data_file::String, err_fit::Function, err_predict::Function)
+	h5open(hdf5_data_file, "r") do h5_file
+		train_sessions = names(h5_file["train"])[1:40]
+		valid_sessions = names(h5_file["train"])[41:end]
+
+		model = err_fit(hdf5_data_file, train_sessions)
+
+		test_targets = Array(Vector{Int},  0)
+		test_preds   = Array(Vector{Float64}, 0)
+
+		for subject_sessions in Iterators.groupby(test_sessions, subject_id)
+			for session in subject_sessions
+				data = read(h5_file["train"][session])
+				targets = Int[get_label(labels, subject_id(session), session_id(session), i) for i=1:size(features,1)]
+				push!(test_targets, targets)
+				preds = vec(predict_probs(model, features)[:,2])
+				push!(test_preds, preds)
+				println("Session ", session, " results: ", auc(targets, preds), " Positive Targets: ", sum(targets), "/", length(targets))
+			end
+		end
+		println("Test score: ", auc(vcat(test_targets...), vcat(test_preds...)))
+
+	end
+end
