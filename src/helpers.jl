@@ -24,6 +24,37 @@ function extract_features(data::Array{Float64, 2})
 	features
 end
 
+function extract_augmented_features(data::Array{Float64, 2}, targets::Vector{Int})
+    filter = digitalfilter(Bandpass(0.5, 20, fs=200), Butterworth(10))
+
+    events = find(data[:,59])
+
+    background = ones(Int, size(data,1))
+    background[1:1000] = 0
+    background[end-1000:end] = 0
+    for i=events
+        background[i+(-100:100)]=0
+    end
+
+    num_background=100
+
+    background_sample_locs = find(background)
+    background_sample_locs = background_sample_locs[randperm(length(background_sample_locs))][1:num_background]
+
+    events  = vcat(events, background_sample_locs)
+    targets = vcat(targets, ones(Int, num_background))
+
+    zmuv = fit(data[:,2:58], ZmuvOptions())
+    transformed = transform(zmuv, filt(filter, data[:,2:58]))
+    #transformed = filt(filter, data[:,2:58])
+    window = 0:10:200 # samples, at a 200 Hz sampling rate
+    features = zeros(length(events), 57*length(window))
+    for i=1:length(events)
+        features[i,:] = transformed[events[i]+window, :]
+    end
+    features, targets
+end
+
 function univariate_gaussian_importance(features::Array{Float64, 2}, target::Vector{Int})
 	groups = sort(unique(target))
 	@assert length(groups)==2
@@ -71,19 +102,21 @@ function inter_subject_train_valid(hdf5_data_file::String, labels_file::String, 
 
 		model = err_fit(h5_file, train_sessions, labels)
 
-		valid_targets = Array(Vector{Int},  0)
-		valid_preds   = Array(Vector{Float64}, 0)
+		valid_targets = Vector{Int}[]
+		valid_preds   = Vector{Float64}[]
 
 		for subject_sessions in Iterators.groupby(valid_sessions, subject_id)
+            push!(valid_targets, Int[])
+            push!(valid_preds, Float64[])
 			for session in subject_sessions
 				data = read(h5_file["train"][session])
                 features = err_features(data)
 				targets = Int[get_label(labels, subject_id(session), session_id(session), i) for i=1:size(features,1)]
-				push!(valid_targets, targets)
+				push!(valid_targets[end], targets...)
 				preds = vec(predict_probs(model, features)[:,2])
-				push!(valid_preds, preds)
-				println("Session ", session, " results: ", auc(targets, preds), " Positive Targets: ", sum(targets), "/", length(targets))
+				push!(valid_preds[end], preds...)
 			end
+            println("Subject ", subject_id(subject_sessions[1]), " results: ", auc(valid_targets[end], valid_preds[end]), " Positive Targets: ", sum(valid_targets[end]), "/", length(valid_targets[end]))
 		end
 		println("Test score: ", auc(vcat(valid_targets...), vcat(valid_preds...)))
 	end
