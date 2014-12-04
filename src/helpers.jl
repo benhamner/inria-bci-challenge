@@ -24,7 +24,7 @@ function extract_features(data::Array{Float64, 2})
 	features
 end
 
-function extract_augmented_features(data::Array{Float64, 2}, targets::Vector{Int})
+function extract_augmented_features(data::Array{Float64, 2}, targets::Vector{Int}; augmented_class::Int=0, num_background::Int=100)
     filter = digitalfilter(Bandpass(0.5, 20, fs=200), Butterworth(10))
 
     events = find(data[:,59])
@@ -36,13 +36,11 @@ function extract_augmented_features(data::Array{Float64, 2}, targets::Vector{Int
         background[i+(-100:100)]=0
     end
 
-    num_background=100
-
     background_sample_locs = find(background)
     background_sample_locs = background_sample_locs[randperm(length(background_sample_locs))][1:num_background]
 
     events  = vcat(events, background_sample_locs)
-    targets = vcat(targets, ones(Int, num_background))
+    targets = vcat(targets, augmented_class*ones(Int, num_background))
 
     zmuv = fit(data[:,2:58], ZmuvOptions())
     transformed = transform(zmuv, filt(filter, data[:,2:58]))
@@ -96,6 +94,7 @@ session_id(session_name::String) = int(match(r"Data_S(\d+)_Sess(\d+)", session_n
 
 function inter_subject_train_valid(hdf5_data_file::String, labels_file::String, err_fit::Function, err_features::Function)
     labels = readtable(labels_file)
+    scores = DataFrame(Subject=ASCIIString[], AUC=Float64[])
 	h5open(hdf5_data_file, "r") do h5_file
 		train_sessions = names(h5_file["train"])[1:40]
 		valid_sessions = names(h5_file["train"])[41:end]
@@ -116,8 +115,13 @@ function inter_subject_train_valid(hdf5_data_file::String, labels_file::String, 
 				preds = vec(predict_probs(model, features)[:,2])
 				push!(valid_preds[end], preds...)
 			end
-            println("Subject ", subject_id(subject_sessions[1]), " results: ", auc(valid_targets[end], valid_preds[end]), " Positive Targets: ", sum(valid_targets[end]), "/", length(valid_targets[end]))
+            score = auc(valid_targets[end], valid_preds[end])
+            scores = vcat(scores, DataFrame(Subject=string(subject_id(subject_sessions[1])), AUC=[score]))
+            println("Subject ", subject_id(subject_sessions[1]), " results: ", score, " Positive Targets: ", sum(valid_targets[end]), "/", length(valid_targets[end]))
 		end
-		println("Test score: ", auc(vcat(valid_targets...), vcat(valid_preds...)))
+        score = auc(vcat(valid_targets...), vcat(valid_preds...))
+        scores = vcat(scores, DataFrame(Subject=["All"], AUC=[score]))
+		println("Test score: ", score)
 	end
+    scores
 end
