@@ -2,8 +2,9 @@ using Gadfly
 
 include("helpers.jl")
 
-hdf5_data_file = ARGS[1]
-labels_file    = ARGS[2]
+plots_dir      = ARGS[1]
+hdf5_data_file = ARGS[2]
+labels_file    = ARGS[3]
 
 function fit_nn_model(h5_file, train_sessions, labels)
     train_fea     = Array(Array{Float64,2}, 0)
@@ -22,7 +23,7 @@ function fit_nn_model(h5_file, train_sessions, labels)
     fea = fea[p, :]
     tar = tar[p]
 
-    @time model = fit(fea, tar, classification_net_options(hidden_layers=[50,10], stop_criteria=StopAfterIteration(20)))
+    @time model = fit(fea, tar, classification_net_options(hidden_layers=[10], stop_criteria=StopAfterIteration(5)))
     @time preds = vec(predict_probs(model, fea)[:,2])
     println("Train results: ", auc(tar, preds), " Positive Targets: ", sum(tar), "/", length(tar))
     model
@@ -47,7 +48,7 @@ function fit_augmented_nn_model(h5_file, train_sessions, labels)
     fea = fea[p, :]
     tar = tar[p]
 
-    @time model = fit(fea, tar, classification_net_options(hidden_layers=[50,10], stop_criteria=StopAfterIteration(20)))
+    @time model = fit(fea, tar, classification_net_options(hidden_layers=[10], stop_criteria=StopAfterIteration(5)))
     @time preds = vec(predict_probs(model, fea)[:,2])
     println("Train results: ", auc(tar, preds), " Positive Targets: ", sum(tar), "/", length(tar))
     model
@@ -61,5 +62,4 @@ rename!(score2, :AUC, :Score2)
 scores = join(score1, score2, on=:Subject)
 println(scores)
 
-draw(PNG("p.png", 8inch, 6inch), plot(scores, x=:Score1, y=:Score2, Geom.point))
-# plot(scores, x=:Score1, y=:Score2, Geom.point)
+draw(PNG(joinpath(plots_dir, "augmented.png"), 8inch, 6inch), plot(scores, x=:Score1, y=:Score2, Geom.point))
