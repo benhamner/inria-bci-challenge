@@ -62,4 +62,4 @@ rename!(score2, :AUC, :Score2)
 scores = join(score1, score2, on=:Subject)
 println(scores)
 
-draw(PNG(joinpath(plots_dir, "augmented.png"), 8inch, 6inch), plot(scores, x=:Score1, y=:Score2, Geom.point))
+draw(PNG(joinpath(plots_dir, "augmented2.png"), 8inch, 6inch), plot(scores, x=:Score1, y=:Score2, color=:Subject, Geom.point))

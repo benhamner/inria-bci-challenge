@@ -21,7 +21,7 @@ hdf5:
 	julia src/raw_to_hdf5.jl $(RAW_DIR)/train.zip $(RAW_DIR)/test.zip $(WORKING_DIR)/data.h5
 
 train-valid:
-	julia src/train_valid.jl $(WORKING)/TrainValidPlots $(WORKING_DIR)/data.h5 $(RAW_DIR)/TrainLabels.csv
+	julia src/train_valid.jl $(WORKING_DIR)/TrainValidPlots $(WORKING_DIR)/data.h5 $(RAW_DIR)/TrainLabels.csv
 
 $(WORKING_DIR)/.sentinel:
 	mkdir $(WORKING_DIR)
