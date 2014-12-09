@@ -23,7 +23,7 @@ function fit_nn_model(h5_file, train_sessions, labels)
     fea = fea[p, :]
     tar = tar[p]
 
-    @time model = fit(fea, tar, classification_net_options(hidden_layers=[10], stop_criteria=StopAfterIteration(5)))
+    @time model = fit(fea, tar, classification_net_options(hidden_layers=[20], stop_criteria=StopAfterIteration(50)))
     @time preds = vec(predict_probs(model, fea)[:,2])
     println("Train results: ", auc(tar, preds), " Positive Targets: ", sum(tar), "/", length(tar))
     model
@@ -48,21 +48,21 @@ function fit_augmented_nn_model(h5_file, train_sessions, labels)
     fea = fea[p, :]
     tar = tar[p]
 
-    @time model = fit(fea, tar, classification_net_options(hidden_layers=[10], stop_criteria=StopAfterIteration(5)))
+    @time model = fit(fea, tar, classification_net_options(hidden_layers=[20], stop_criteria=StopAfterIteration(50)))
     @time preds = vec(predict_probs(model, fea)[:,2])
     println("Train results: ", auc(tar, preds), " Positive Targets: ", sum(tar), "/", length(tar))
     model
 end
 
 score1 = inter_subject_train_valid(hdf5_data_file, labels_file, fit_nn_model, extract_features)
-rename!(score1, :AUC, :Score1)
+rename!(score1, :AUC, :ScoreNormal)
 score2 = inter_subject_train_valid(hdf5_data_file, labels_file, fit_augmented_nn_model, extract_features)
-rename!(score2, :AUC, :Score2)
+rename!(score2, :AUC, :ScoreAugmented)
 
 scores = join(score1, score2, on=:Subject)
 println(scores)
 
-layer1 = layer(scores, x=:Score1, y=:Score2, color=:Subject, Geom.point)
+layer1 = layer(scores, x=:ScoreNormal, y=:ScoreAugmented, color=:Subject, Geom.point)
 layer2 = layer(x=0:0.1:1, y=0:0.1:1, Geom.line)
 
-draw(PNG(joinpath(plots_dir, "augmented2.png"), 8inch, 6inch), plot(layer1, layer2, Theme(panel_fill=color("white"), panel_opacity=1.0)))
+draw(PNG(joinpath(plots_dir, "augmented3.png"), 8inch, 6inch), plot(layer1, layer2, Theme(panel_fill=color("white"), panel_opacity=1.0)))
